@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="zh">
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <link rel="stylesheet" href="css/bootstrap-theme.min.css">
+    <script src="js/jquery-1.9.1.min.js"></script>
+    <script src="js/bootstrap.js"></script>
+    <style type="text/css">
+    #msg {
+        height: 400px;
+        overflow-y: auto;
+    }
+
+    #userName {
+        width: 200px;
+    }
+
+    #logout {
+        display: none;
+    }
+    </style>
+    <title>webSocket测试</title>
+</head>
+
+<body>
+    <div class="container">
+        <div class="page-header" id="tou">webSocket及时聊天Demo程序</div>
+        <p class="text-right" id="logout">
+            <button class="btn btn-danger" id="logout-btn">退出</button>
+        </p>
+        <div class="well" id="msg" >
+        </div>
+        <div class="col-lg">
+            <div class="input-group">
+                <input type="text" class="form-control" placeholder="发送信息..." id="message"> <span class="input-group-btn">
+                	<button class="btn btn-default" type="button"  onclick="$('#upload').click();"
+                        >发图</button>
+                    <button class="btn btn-default" type="button" id="send"
+                        disabled="disabled">发送</button>
+                    
+                </span>
+            </div>
+                  <form method="post" id="email" action="/upload.do" enctype="multipart/form-data" style="opacity: 0"   >
+   			 <input type="file"  id="upload" name="file" onchange="myupload()" style="float:right"  />
+		</form>
+		
+            <div class="input-group">
+                <input id="userName" type="text" class="form-control" name="userName" placeholder="输入您的用户名" />
+                <button class="btn btn-default" type="button" id="connection-btn">建立连接</button>
+            </div>
+            <!-- /input-group -->
+        </div>
+        <!-- /.col-lg-6 -->
+    </div>
+    <!-- /.row -->
+    </div>
+    <script type="text/javascript">
+
+    var websocket;
+    
+    
+    $(function() {
+    	
+        $("#connection-btn").bind("click", function() {
+            var userName = $("#userName").val();
+            if (userName == null || userName == "") {
+                alert("请输入您的用户名");
+                return;
+            }
+            connection(userName);
+        });
+
+        function connection(userName) {
+            var host = window.location.host;
+            if ('WebSocket' in window) {
+                websocket = new WebSocket("ws://" + host +
+                    "/webSocketServer/" + userName);
+            } else if ('MozWebSocket' in window) {
+                websocket = new MozWebSocket("ws://" + host +
+                    "/webSocketServer/" + userName);
+            }
+            websocket.onopen = function(evnt) {
+                $("#tou").html("链接服务器成功!")
+                $("#send").prop("disabled", "");
+                $("#connection-btn").prop("disabled", "disabled");
+                $("#logout").show();
+            };
+            websocket.onmessage = function(evnt) {
+            	  if(evnt.data.indexOf("$_file")!=-1){  
+            		  var strs = evnt.data.split("$_file:");
+            		  var img = document.createElement("img");  
+                	  img.src= strs[1];
+                	  img.onload=function(){
+						if(img.height>400)
+						img.height=250;
+					
+                    	  };
+                	  $("#msg").append("<br/>"+strs[0]); 
+                	  $("#msg").append("<br/>");
+                	  document.getElementById("msg").appendChild(img);
+
+                	  setTimeout(function(){
+                	  $('#msg').scrollTop( $('#msg')[0].scrollHeight );
+            	  	},100);
+               	   
+                	   
+            	    }else{
+            	    	 $("#msg").append( "<br/>" + evnt.data); 
+            	    	 
+            	    	 $('#msg').scrollTop( $('#msg')[0].scrollHeight );
+
+             	        
+                	    }
+     				           
+            };
+            websocket.onerror = function(evnt) {
+                $("#tou").html("报错!")
+            };
+            websocket.onclose = function(evnt) {
+                $("#tou").html("与服务器断开了链接!");
+                $("#send").prop("disabled", "disabled");
+                $("#connection-btn").prop("disabled", "");
+                $("#logout").hide();
+            }
+        }
+
+
+        
+        function send() {
+            if (websocket != null) {
+                var $message = $("#message");
+                var data = $message.val();
+                if (data == null || data == "") {
+                    return;
+                }
+                websocket.send(data);
+                $message.val("");
+            } else {
+                alert('未与服务器链接.');
+            }
+        }
+
+        $('#send').bind('click', function() {
+            send();
+        });
+
+        
+        $(document).on("keypress", function(event) {
+            if (event.keyCode == "13") {
+                send();
+            }
+        });
+
+        $("#logout-btn").on("click", function() {
+            websocket.close(); //关闭TCP连接
+        });
+    });
+
+
+    function myupload(){
+    	if(websocket == null){
+
+				alert("先建立连接啊傻吊..");
+				return;
+        	}
+    	
+    var obj =	 $('#upload').get(0).files[0];
+		var formData = new FormData(); 
+	formData.append("file",obj);
+		//alert(formData); 
+     $.ajax({  
+    	 url:'/upload', 
+          type: 'POST',  
+          data: formData,
+          cache: false,  
+          contentType: false,  
+          processData: false,  
+          success: function (returndata) {  
+
+        	 /*  var img = document.createElement("img");  
+        	  
+              img.src="http://localhost:8080/pic/2018/939be475b17840a69168291f632060e0.jpg";  
+              document.getElementById("msg").appendChild(img);  */
+              var json = eval('('+returndata+')');
+              var file = $.parseJSON( json );
+              var msg =  "$_file:"+file.attachFileurl+file.attachName;
+              websocket.send(msg);
+              //alert(msg);
+          }  
+          
+     });  
+}
+	
+
+
+    
+    function _upload(){
+    	 if(typeof FileReader == "undefined"){
+             alert("您的浏览器不支持FileReader对象！");
+         }
+        var reader = new FileReader();
+        var file = $('#upload').get(0).files[0];
+        //base64
+         // reader.readAsDataURL(file); 
+         
+         //二进制
+          reader.readAsArrayBuffer(file);
+        //文件读取完毕后该函数响应
+        reader.onload = function loaded(evt) {
+          var binaryString = evt.target.result;
+                        //发送文件
+                websocket.send(binaryString);
+        }
+        }
+    </script>
+</body>
+
+</html>
